@@ -19,11 +19,11 @@ class FeatureExtract:
     RED_EXTRACT =  [ [[0,  50, 50], [10, 255,255]], 
                      [[170,50, 50], [180,255,255]]]
     
-    GREEN_EXTRACT = [[ (FeatureExtract.GREEN_HSV[0] - 10), 50,  50 ], 
-                     [ (FeatureExtract.GREEN_HSV[0] + 10), 255, 255]]
+    GREEN_EXTRACT = [[ (GREEN_HSV[0] - 10), 50,  50 ], 
+                     [ (GREEN_HSV[0] + 10), 255, 255]]
     
-    BLUE_EXTRACT  = [[ (FeatureExtract.BLUE_HSV[0]  - 10), 50,  50], 
-                     [ (FeatureExtract.BLUE_HSV[0]  + 10), 255, 255]]
+    BLUE_EXTRACT  = [[ (BLUE_HSV[0]  - 10), 50,  50], 
+                     [ (BLUE_HSV[0]  + 10), 255, 255]]
     
     def __init__ (self, height, width, curImage, imageModified = None):
         
