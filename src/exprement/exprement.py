@@ -9,6 +9,9 @@ import cv2
 import tensorflow as tf
 import copy
 
+import ImageProcessExtension
+
+
 
 
 cap = cv2.VideoCapture(1)
@@ -20,13 +23,16 @@ width  = cap.get(cv2.cv.CV_CAP_PROP_FRAME_WIDTH)
 height = cap.get(cv2.cv.CV_CAP_PROP_FRAME_HEIGHT)
 
 
-resol = 10
+resol = 3
 dispFrameList = []
+ext = ImageProcessExtension.ImageProcessExtension()
 
 while(True):
     
     
     for i in range(resol):
+
+        print (i)
     
         # Capture frame-by-frame
         ret, frame = cap.read()
@@ -45,16 +51,47 @@ while(True):
                     frame[i][j][2] = 0
         """
         
-        #frame = cv2.GaussianBlur(frame, (15,15), 0)
         
         
         
+        frame = cv2.GaussianBlur(frame, (15,15), 0)
+        
+        
+        frame_list = frame.tolist()
+        
+
+        frame_list = ext.exadurateColorByOrder(frame_list)
+        
+        frame = np.asarray(np.uint8(frame_list))
+        
+        """
+        for i in range(len(frame)):
+            for j in range (len (frame[i])):
+                
+                t = []
+                
+                for k in range (len (frame[i][j])):
+                    t.append(float(frame[i][j][k]))
+                    t[k] = t[k] * t[k]
+                
+                tSum = sum(t)
+                
+                
+                frame[i][j] = [np.uint8( (tVal / tSum)*255 ) for tVal in t]
+                    
+        """
+                
+                
+        #lower_redm0 = np.array([110,100,100])
+        #upper_redm0 = np.array([130,255,255])
+           
         lower_redm0 = np.array([0,50,50])
         upper_redm0 = np.array([10,255,255])
         
         lower_redm1 = np.array([170,50,50])
         upper_redm1 = np.array([180,255,255])
         
+       
         hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
         
         redRegionOfImage0 = cv2.inRange(hsv, lower_redm0, upper_redm0) 
