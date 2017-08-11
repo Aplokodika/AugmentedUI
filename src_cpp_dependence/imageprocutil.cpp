@@ -22,7 +22,7 @@
 #include <stdint.h>
 #include <deque>
 
-
+py::dict globals;
 
 // Mockup functions.
 
@@ -76,51 +76,45 @@ struct enable_numpy_scalar_converter
   }
 };
 
-/*
 
- """
-        for i in range(len(frame)):
-            for j in range (len (frame[i])):
-
-                t = []
-
-                for k in range (len (frame[i][j])):
-                    t.append(float(frame[i][j][k]))
-                    t[k] = t[k] * t[k]
-
-                tSum = sum(t)
-
-
-                frame[i][j] = [np.uint8( (tVal / tSum)*255 ) for tVal in t]
-
-        """
- */
 
 const uint64_t NO_OF_COLORS_PER_PIXEL = 3;
 
-py::list ImageProcessExtension::exadurateColorByOrder(py::list& imageFrame) {
+
+py::list ImageProcessExtension::exaggerateColorByOrder(py::object& pImageFrame, py::object porder) {
+
+	int order = py::extract<int> (porder);
+
+	globals["imageFrame"] = pImageFrame;
+
+	py::exec("imageFrame = list(imageFrame)", globals);
+
+	py::list imageFrame (globals["imageFrame"]);
 
 	uint64_t ySize = py::len(imageFrame);
-
 	uint64_t xSize = py::len(imageFrame[0]);
-
 	py::list result;
 
-
+	double prod, sum;
 
 	for (uint64_t i = 0; i < ySize; i++) {
 
 		py::list row;
 
-
 		for (uint64_t j = 0; j < xSize; j++) {
-			std::deque <float> temp;
+
+			std::deque <double> temp;
+
 			for (uint64_t k = 0; k < NO_OF_COLORS_PER_PIXEL; k++) {
-				temp.push_back((float)py::extract<uint8_t>(imageFrame[i][j][k]));
-				temp[k] *= temp[k];
+				temp.push_back((double)py::extract<uint8_t>(imageFrame[i][j][k]));
+				prod = 1.0;
+				for (uint8_t i = 1; i < order; i++) {
+					prod *= temp[k];
+				}
+			    temp[k] *= prod;
 			}
 
-			float sum = 0.0;
+			sum = 0.0;
 
 			for (uint64_t k= 0; k < 3; k++) {
 				sum += temp[k];
@@ -148,12 +142,19 @@ py::list ImageProcessExtension::exadurateColorByOrder(py::list& imageFrame) {
 
 BOOST_PYTHON_MODULE(ImageProcessExtension)
 {
+
 	import_array();
+
 
 	enable_numpy_scalar_converter <uint8_t, NPY_UBYTE>();
 
 	py::class_<ImageProcessExtension> ("ImageProcessExtension")
-			.def("exadurateColorByOrder", &ImageProcessExtension::exadurateColorByOrder)
+			.def("exaggerateColorByOrder", &ImageProcessExtension::exaggerateColorByOrder)
 	;
 
+	py::dict  __globals (py::borrowed(PyEval_GetGlobals()));
+
+	globals = __globals;
+
+	py::exec("import numpy", globals);
 }

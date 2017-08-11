@@ -12,10 +12,11 @@
 #include <Python.h>
 namespace py = boost::python;
 
-
 struct ImageProcessExtension {
 
-	py::list exadurateColorByOrder (py::list& imageFrame);
+	py::list exaggerateColorByOrder (py::object& pImageFrame, py::object porder);
+
+
 
 };
 
