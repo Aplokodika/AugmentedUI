@@ -11,8 +11,7 @@ import copy
 
 import ImageProcessExtension
 
-
-
+ 
 
 cap = cv2.VideoCapture(1)
 
@@ -23,7 +22,7 @@ width  = cap.get(cv2.cv.CV_CAP_PROP_FRAME_WIDTH)
 height = cap.get(cv2.cv.CV_CAP_PROP_FRAME_HEIGHT)
 
 
-resol = 3
+resol = 10
 dispFrameList = []
 ext = ImageProcessExtension.ImageProcessExtension()
 
@@ -56,13 +55,11 @@ while(True):
         
         frame = cv2.GaussianBlur(frame, (15,15), 0)
         
-        
-        frame_list = frame.tolist()
-        
-
-        frame_list = ext.exadurateColorByOrder(frame_list)
+    
+        frame_list = ext.exaggerateColorByOrder(frame, 20)
         
         frame = np.asarray(np.uint8(frame_list))
+    
         
         """
         for i in range(len(frame)):
@@ -99,10 +96,10 @@ while(True):
         
         redRegionOfImage  = redRegionOfImage0 + redRegionOfImage1
         
-        dispFrame = hsv.copy()
-        dispFrame [np.where(redRegionOfImage == 0)] = 0
-        dispFrame [np.where(redRegionOfImage != 0)] = 255
-        dispFrameList.append(dispFrame.copy())
+        #print (redRegionOfImage)
+        dispFrame = redRegionOfImage
+        
+        dispFrameList.append(dispFrame)
         
         
     # Our operations on the frame come here
