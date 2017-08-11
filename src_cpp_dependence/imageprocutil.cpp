@@ -27,54 +27,37 @@
 
 py::dict globals;
 
-// Mockup functions.
 
-/// @brief Converter type that enables automatic conversions between NumPy
-///        scalars and C++ types.
-template <typename T, NPY_TYPES NumPyScalarType>
-struct enable_numpy_scalar_converter
+template <typename T, NPY_TYPES NumpyType>
+struct configure_numpy_data_convertion
 {
-  enable_numpy_scalar_converter()
+	configure_numpy_data_convertion()
   {
-    // Required NumPy call in order to use the NumPy C API within another
-    // extension module.
+
     import_array();
 
-    boost::python::converter::registry::push_back(
-      &convertible,
-      &construct,
-      boost::python::type_id<T>());
+    py::converter::registry::push_back( &isconvertible, &perform_convertion,
+    py::type_id<T>());
   }
 
-  static void* convertible(PyObject* object)
+  static void* isconvertible(PyObject* var)
   {
-    // The object is convertible if all of the following are true:
-    // - is a valid object.
-    // - is a numpy array scalar.
-    // - its descriptor type matches the type for this converter.
-    return (
-      object &&                                                    // Valid
-      PyArray_CheckScalar(object) &&                               // Scalar
-      PyArray_DescrFromScalar(object)->type_num == NumPyScalarType // Match
-    )
-      ? object // The Python object can be converted.
-      : NULL;
+    if ( var && PyArray_CheckScalar(var) &&
+    		PyArray_DescrFromScalar(var)->type_num == NumpyType)
+    	return var;
+      else
+    	  return NULL;
   }
 
-  static void construct(
-    PyObject* object,
-    boost::python::converter::rvalue_from_python_stage1_data* data)
+  static void perform_convertion( PyObject* var,
+		  py::converter::rvalue_from_python_stage1_data* data)
   {
-    // Obtain a handle to the memory block that the converter has allocated
-    // for the C++ type.
-    namespace python = boost::python;
-    typedef python::converter::rvalue_from_python_storage<T> storage_type;
-    void* storage = reinterpret_cast<storage_type*>(data)->storage.bytes;
 
-    // Extract the array scalar type directly into the storage.
-    PyArray_ScalarAsCtype(object, storage);
+    typedef py::converter::rvalue_from_python_storage<T> DestinationType;
+    void* storage = reinterpret_cast<DestinationType*>(data)->storage.bytes;
+    PyArray_ScalarAsCtype(var, storage);
 
-    // Set convertible to indicate success.
+    // signify successful conversion.
     data->convertible = storage;
   }
 };
@@ -308,7 +291,7 @@ BOOST_PYTHON_MODULE(ImageProcessExtension)
 	import_array();
 
 
-	enable_numpy_scalar_converter <uint8_t, NPY_UBYTE>();
+	configure_numpy_data_convertion <uint8_t, NPY_UBYTE>();
 
 	py::class_<ImageProcessExtension> ("ImageProcessExtension")
 			.def_readonly("READ",                 &ImageProcessExtension::_READ_                             )
