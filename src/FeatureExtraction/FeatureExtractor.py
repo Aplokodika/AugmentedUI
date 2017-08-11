@@ -129,8 +129,53 @@ class FeatureExtract:
 
 if __name__ == "__main__":
     cap = cv2.VideoCapture(0)
-    fExt = FeatureExtract(5, 0)     
+    fExt = FeatureExtract(3, 0)     
     fExt.configureDefaultFeatureExtractor()
+    
+    
+    #EXPERIMENT:
+    
+    def updateFrame (rectDrawStack, img, frameName):
+        draw_rectangle_stack(rectDrawStack, img )      
+        cv2.imshow(frameName, img)
+    
+    def draw_rect(event,x,y,flags,param):
+        
+        if event == cv2.EVENT_LBUTTONDOWN:
+            draw_rect.pos1 = (x,y)
+            
+        if event == cv2.EVENT_LBUTTONUP:    
+            
+            draw_rect.drawStack.append((draw_rect.pos1, 
+                                          (x,y), 
+                                          draw_rect.color, 
+                                          draw_rect.thickness ))
+            draw_rect.pos1 = None
+            
+            
+            
+    draw_rect.drawStack = []
+    draw_rect.color     = (170,170,170)
+    draw_rect.thickness = 2
+    draw_rect.image     = None
+    draw_rect.frameName = 'frame'
+    draw_rect.pos1      = None
+
+    
+    
+    def draw_rectangle_stack (drawStack, img):
+        for i in range(len(drawStack)):
+            cv2.rectangle (img,              # image
+                           drawStack[i][0],  # position 1
+                           drawStack[i][1],  # position 2
+                           drawStack[i][2],  # color
+                           drawStack[i][3]   # thickness
+                           )
+            
+    
+    
+    #-------------------------------------------------------------
+    
     
     while (True):
         
@@ -138,7 +183,17 @@ if __name__ == "__main__":
                             FeatureExtract.RED_EXTRACT, 
                             FeatureExtract.AGGREGATE_TYPE_MAJOR)
         
-        cv2.imshow('frame', fExt.getCurImage())
+        draw_rect.image = fExt.getCurImage().copy()
+        
+        cv2.setMouseCallback(draw_rect.frameName, draw_rect)
+          
+        #draw_rectangle_stack(draw_rect.drawStack, draw_rect.image )      
+        #cv2.imshow('frame', draw_rect.image)
+        
+        updateFrame (draw_rect.drawStack, draw_rect.image, 'frame')
+        
         if cv2.waitKey(1) & 0xFF == ord('q'):
             break
-
+        
+            
+            
