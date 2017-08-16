@@ -7,6 +7,7 @@
 
 #include "imageprocutil.h"
 
+#include <Python.h>
 #include <boost/python.hpp>
 #include <numpy/arrayobject.h>
 #include <numpy/arrayscalars.h>
@@ -16,7 +17,6 @@
 
 #include <numpy/arrayobject.h>
 
-#include <Python.h>
 #include <iostream>
 #include <vector>
 #include <stdint.h>
@@ -24,6 +24,8 @@
 #include <fstream>
 #include <assert.h>
 #include <string>
+#include <cstdlib>
+#include <sstream>
 
 py::dict globals;
 
@@ -76,13 +78,15 @@ const int ImageProcessExtension::_INSTANT_BIND  = 1;
 const int ImageProcessExtension::_MAX_THRESHOLD_DYNAMIC_ = 1000;
 
 
-const std::string ImageProcessExtension::__one   	(",1");
-const std::string ImageProcessExtension::__zero  	(",0");
-const std::string ImageProcessExtension::__comma 	(",");
-const std::string ImageProcessExtension::__nextline ("\n");
+const std::string ImageProcessExtension::__one   	 ("1");
+const std::string ImageProcessExtension::__zero  	 ("0");
+const std::string ImageProcessExtension::__comma 	 (",");
+const std::string ImageProcessExtension::__nextline  ("\n");
+const std::string ImageProcessExtension::_blankspace (" ");
 
 
 ImageProcessExtension::ImageProcessExtension ():
+								readPos(0),
 								openMode (-1),
 								bindType(_DYNAMIC_BIND_),
 								fHandle (NULL){
@@ -92,6 +96,13 @@ ImageProcessExtension::ImageProcessExtension ():
 ImageProcessExtension::~ImageProcessExtension() {
 	close_connection();
 }
+
+
+
+
+void ImageProcessExtension::resetReadPos () { readPos = 0; }
+
+void ImageProcessExtension::setReadPos(py::object pos) { readPos = py::extract <int> (pos);}
 
 
 void ImageProcessExtension::close_connection () {
@@ -110,6 +121,37 @@ py::list ImageProcessExtension::convert_image_frame_to_list (py::object& pImageF
 }
 
 
+bool ImageProcessExtension::isnumber (std::string str) {
+	for (int i = 0; i < str.size(); i++) {
+		if (str[i] == '\n') {
+
+			if (i == 0) {
+				return false;
+			} else {
+				return true;
+			}
+
+		}
+		if ( std::isdigit(str[i]) != true){
+			return false;
+		}
+	}
+
+	return true;
+
+}
+
+
+int ImageProcessExtension::atoi (std::string val) {
+	int result;
+
+	std::stringstream sstream (val);
+	sstream >> result;
+
+	return result;
+
+}
+
 std::string ImageProcessExtension::itoa(int num) {
 
 	char* buffer = new char [12];
@@ -125,6 +167,8 @@ void ImageProcessExtension::force_flush_file_buffer () {
 	if ( openMode != _APPEND_ || bindType != _DYNAMIC_BIND_)
 		return;
 
+	fHandle->seekp(std::ios_base::end);
+
 	while (fileBuffer.size()) {
 		(*fHandle) << fileBuffer[0];
 		fileBuffer.pop_front(); // acts like a queue. Pushed back, popped front.
@@ -138,6 +182,96 @@ void ImageProcessExtension::dynamicBindData() {
 		return;
 
 	force_flush_file_buffer ();
+}
+
+/*	@ImageProcessExtension::get_comma_separated_strings
+ *
+ * 	For each "comma symbol or blank-space or '\n' symbol" read by this method,
+ * 	the symbols read by the stream is pushed into the symbol list.
+ * 	pLine contains a string of numbers separated by comma (csv format).
+ *
+ */
+std::deque <std::string> ImageProcessExtension::get_comma_separated_strings (std::string pLine) {
+
+	std::deque <std::string> result; // returns the list of symbols separated by comma.
+	std::ostringstream strStream;	 // stores the symbol read from the string pLine for each iteration
+
+	for (uint64_t i = 0; i  < pLine.size(); i++) {
+
+		// separates for 'comma', 'nextline' or 'blankspace'.
+		if (  (pLine[i] == __comma    [0])	||
+			  (pLine[i] == __nextline [0])  ||
+			  (pLine[i] == _blankspace[0])) {
+
+			// Adds the parsed symbol once 'comma' or 'newline' is read.
+		    // (Also, the stream must not be empty).
+			if ( strStream.rdbuf()->in_avail() != 0) {
+				result.push_back(strStream.str());
+				strStream.clear();
+			}
+		} else {
+			strStream << pLine[i];
+		}
+
+	}
+
+	return result;
+}
+
+
+py::list ImageProcessExtension
+::read_binary_image_clip_from_CSV_file (py::object& representationOfValue1,
+										py::object& representationOfValue0) {
+
+	assert ( (openMode == _READ_) &&
+			 "Error, the file should have been opened in READ mode before calling this method");
+
+
+	const int VALUE_1 = py::extract <int> (representationOfValue1);
+	const int VALUE_0 = py::extract <int> (representationOfValue0);
+
+	py::list result;
+	std::string sizeParameters;
+	std::string lineReadFromFile;
+	std::deque <std::string> symbolList;
+
+	fHandle->seekg(this->readPos, std::ios_base::beg);
+
+	(*fHandle) >> sizeParameters;
+
+	symbolList = this->get_comma_separated_strings(sizeParameters);
+
+	assert ((symbolList.size() == 2) 		  &&
+			(isnumber(symbolList[0]) == true) &&
+			(isnumber(symbolList[1]) == true) &&
+			"Error, the size of the segment-header is either less than 2 or the parameters obtained are not numbers");
+
+	int ySize  = this->atoi(symbolList[0]);
+	int xSize  = this->atoi(symbolList[1]);
+
+	assert ((symbolList.size() == xSize * ySize ) &&
+			"Error, there is a mismatch in the the expected number of pixels and the given number of pixels");
+
+	(*fHandle) >> lineReadFromFile;
+	std::deque <std::string> _tempSymbolList = this->get_comma_separated_strings(lineReadFromFile);
+
+	py::list image;
+
+	for (int i = 0, k = 0; i < ySize; i++) {
+
+		py::list row;
+		for (int j = 0; j < xSize; j++, k++) {
+			py::list pixel;
+			int curValue = ((atoi(_tempSymbolList[k]) == 1) ? VALUE_1: VALUE_0 ) ;
+			for (int k = 0; k < NO_OF_COLORS_PER_PIXEL; k++) {
+				pixel.append((uint8_t)curValue);
+			}
+			row.append(pixel);
+		}
+		image.append(row);
+	}
+
+	return image;
 }
 
 void ImageProcessExtension::write_binary_image_clip_to_CSV_file (py::object& pImageFrame) {
@@ -156,6 +290,8 @@ void ImageProcessExtension::write_binary_image_clip_to_CSV_file (py::object& pIm
 	lineToBeAdded = std::string(itoa(ySize)) + __comma +
 			 	 	std::string(itoa(xSize));
 
+	std::ostringstream strStream;
+
 	for (int i = 0; i < ySize; i++) {
 		for (int j = 0; j < xSize; j++) {
 
@@ -167,26 +303,39 @@ void ImageProcessExtension::write_binary_image_clip_to_CSV_file (py::object& pIm
 					 "Error, this method deals only with binary images. You have given a non-binary image");
 
 			if (temp == 0) {
-				lineToBeAdded = lineToBeAdded + __zero;
+
+				strStream << __comma << __zero;
+
+				// lineToBeAdded = lineToBeAdded + __comma + __zero;
 			} else {
-				lineToBeAdded = lineToBeAdded + __one;
+
+				strStream << __comma <<__one;
+
+				//lineToBeAdded = lineToBeAdded + __comma + __one;
 			}
 
 		}
 	}
 
-	lineToBeAdded = lineToBeAdded + __nextline;
+
+	strStream << __nextline;
+	// lineToBeAdded = lineToBeAdded + __nextline;
 
 	assert ( (bindType == _DYNAMIC_BIND_  ||
 				  bindType == _INSTANT_BIND)  &&
 				 "Error, invalid bindType encountered");
 
 	if (bindType == _DYNAMIC_BIND_) {
-		fileBuffer.push_back(lineToBeAdded);
+		//fileBuffer.push_back(lineToBeAdded);
+
+		fileBuffer.push_back(strStream.str());
+
 		dynamicBindData();
 	} else {
 		assert (openMode == _APPEND_ && "Error, the open mode must be APPEND, if INSTANT_BIND");
-		(*fHandle) << lineToBeAdded;
+		//(*fHandle) << lineToBeAdded;
+
+		(*fHandle) << strStream.str();
 		fHandle->flush();
 	}
 }
@@ -197,9 +346,9 @@ int ImageProcessExtension::exists(const char *fname)
     if ((file = fopen(fname, "r")))
     {
         fclose(file);
-        return 1;
+        return true;
     }
-    return 0;
+    return false;
 }
 
 void ImageProcessExtension::connect_to_file (py::object& pFName,
@@ -294,16 +443,17 @@ BOOST_PYTHON_MODULE(ImageProcessExtension)
 	configure_numpy_data_convertion <uint8_t, NPY_UBYTE>();
 
 	py::class_<ImageProcessExtension> ("ImageProcessExtension")
-			.def_readonly("READ",                 &ImageProcessExtension::_READ_                             )
-			.def_readonly("WRITE",                &ImageProcessExtension::_WRITE_                            )
-			.def_readonly("APPEND",       		  &ImageProcessExtension::_APPEND_                           )
-			.def_readonly("DYNAMIC_BIND", 		  &ImageProcessExtension::_DYNAMIC_BIND_                     )
-			.def_readonly("INSTANT_BIND", 		  &ImageProcessExtension::_INSTANT_BIND                      )
-			.def("exaggerateColorByOrder",		  &ImageProcessExtension::exaggerate_color_by_order          )
-			.def("connectToFile", 		  		  &ImageProcessExtension::connect_to_file                    )
-			.def("forceFlushToBuffer",    		  &ImageProcessExtension::force_flush_file_buffer            )
-			.def("writeBinaryImageClipToCSVFile", &ImageProcessExtension::write_binary_image_clip_to_CSV_file)
-			.def("closeConnection",               &ImageProcessExtension::close_connection)
+			.def_readonly("READ",                  &ImageProcessExtension::_READ_                              )
+			.def_readonly("WRITE",                 &ImageProcessExtension::_WRITE_                             )
+			.def_readonly("APPEND",       		   &ImageProcessExtension::_APPEND_                            )
+			.def_readonly("DYNAMIC_BIND", 		   &ImageProcessExtension::_DYNAMIC_BIND_                      )
+			.def_readonly("INSTANT_BIND", 		   &ImageProcessExtension::_INSTANT_BIND                       )
+			.def("exaggerateColorByOrder",		   &ImageProcessExtension::exaggerate_color_by_order           )
+			.def("connectToFile", 		  		   &ImageProcessExtension::connect_to_file                     )
+			.def("forceFlushToBuffer",    		   &ImageProcessExtension::force_flush_file_buffer             )
+			.def("writeBinaryImageClipToCSVFile",  &ImageProcessExtension::write_binary_image_clip_to_CSV_file )
+			.def("closeConnection",                &ImageProcessExtension::close_connection					   )
+			.def("readBinaryImageClipFromCSVfile", &ImageProcessExtension::read_binary_image_clip_from_CSV_file)
 		;
 
 	py::dict  __globals (py::borrowed(PyEval_GetGlobals()));

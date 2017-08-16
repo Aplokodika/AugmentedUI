@@ -8,24 +8,19 @@
 #ifndef IMAGEPROCUTIL_H_
 #define IMAGEPROCUTIL_H_
 
+#include <boost/python.hpp>
+#include <Python.h>
+
 #include <fstream>
 #include <deque>
 #include <stdint.h>
 #include <string>
-
-#include <boost/python.hpp>
-#include <Python.h>
+#include <vector>
+#include <ctype.h>
 
 namespace py = boost::python;
 
 struct ImageProcessExtension {
-
-
-	int openMode;
-
-	int bindType;
-
-	std::fstream *fHandle;
 
 	static const int _READ_  ;
 	static const int _WRITE_ ;
@@ -54,26 +49,50 @@ struct ImageProcessExtension {
 
 	void write_binary_image_clip_to_CSV_file (py::object& pImageFrame);
 
-	py::list read_binary_image_clip_from_CSV_file (py::tuple& pos1,
-			py::tuple& pos2);
+	py::list read_binary_image_clip_from_CSV_file (py::object& representationOfValue1,
+												   py::object& representationOfValue0);
+
+
+	void resetReadPos ();
+
+	void setReadPos(py::object pos);
 
 private:
 
-	py::list convert_image_frame_to_list (py::object& pImageFrame);
+	int readPos;
+
+	int openMode;
+
+	int bindType;
+
+	std::fstream *fHandle;
 
 	std::deque <std::string> fileBuffer;
+
+	void dynamicBindData ();
 
 	static const std::string __one;
 	static const std::string __zero;
 	static const std::string __comma;
 	static const std::string __nextline;
+	static const std::string _blankspace;
 
-	std::string itoa (int num);
+public:
+
+	static py::list convert_image_frame_to_list (py::object& pImageFrame);
 
 
-	void dynamicBindData ();
+	static std::string itoa (int num);
+	static int atoi (std::string val);
 
-	int exists(const char *fname);
+
+
+	static int exists(const char *fname);
+
+	static std::deque <std::string> get_comma_separated_strings (std::string pLine);
+
+	static bool isnumber (std::string str);
+
 };
 
 
